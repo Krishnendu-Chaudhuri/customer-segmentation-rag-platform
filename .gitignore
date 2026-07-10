@@ -5,6 +5,7 @@ __pycache__/
 *.parquet
 output/
 data/*.csv
+output/chroma/
 .pytest_cache/
 *.egg-info/
 notebooks/.ipynb_checkpoints/
