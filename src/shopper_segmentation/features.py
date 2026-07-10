@@ -12,7 +12,7 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 
-from etl import DATA_DIR, OUTPUT_DIR
+from shopper_segmentation.etl import DATA_DIR, OUTPUT_DIR
 
 RAW_INPUT = OUTPUT_DIR / "household_features_raw.parquet"
 DEFAULT_OUTPUT = OUTPUT_DIR / "household_features.parquet"

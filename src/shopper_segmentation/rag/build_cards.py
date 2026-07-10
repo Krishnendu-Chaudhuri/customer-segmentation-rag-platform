@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from etl import OUTPUT_DIR
+from shopper_segmentation.etl import OUTPUT_DIR
 
 PROFILES_PATH = OUTPUT_DIR / "segment_profiles.json"
 RECOMMENDATIONS_PATH = OUTPUT_DIR / "segment_recommendations.json"

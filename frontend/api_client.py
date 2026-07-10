@@ -42,7 +42,7 @@ def _request(method: str, path: str, **kwargs: Any) -> Any:
     except httpx.ConnectError as exc:
         raise RuntimeError(
             "Cannot connect to the API. Start the backend with: "
-            "uvicorn app:app --host 127.0.0.1 --port 8000"
+            "uvicorn shopper_segmentation.api.app:app --host 127.0.0.1 --port 8000"
         ) from exc
     except httpx.HTTPStatusError as exc:
         detail = exc.response.text

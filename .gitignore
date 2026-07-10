@@ -3,7 +3,8 @@
 __pycache__/
 *.pyc
 *.parquet
-output/
+output/*
+!output/.gitkeep
 data/*.csv
 output/chroma/
 .pytest_cache/

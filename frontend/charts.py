@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-from etl import OUTPUT_DIR
+from shopper_segmentation.etl import OUTPUT_DIR
 
 RADAR_FEATURES = [
     "monetary",

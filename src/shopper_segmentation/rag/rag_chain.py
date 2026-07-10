@@ -12,7 +12,7 @@ from typing import Any
 from dotenv import load_dotenv
 from groq import Groq
 
-from rag.embed_store import retrieve_cards
+from shopper_segmentation.rag.embed_store import retrieve_cards
 
 load_dotenv()
 

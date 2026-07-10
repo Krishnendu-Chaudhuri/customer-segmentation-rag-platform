@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from app import app
+from shopper_segmentation.api.app import app
 
 client = TestClient(app)
 

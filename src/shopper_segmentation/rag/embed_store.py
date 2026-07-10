@@ -8,8 +8,8 @@ import chromadb
 from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
 
-from etl import OUTPUT_DIR
-from rag.build_cards import build_all_cards
+from shopper_segmentation.etl import OUTPUT_DIR
+from shopper_segmentation.rag.build_cards import build_all_cards
 
 CHROMA_DIR = OUTPUT_DIR / "chroma"
 COLLECTION_NAME = "segment_cards"

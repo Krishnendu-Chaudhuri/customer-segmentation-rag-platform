@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from features import (
+from shopper_segmentation.features import (
     compute_price_sensitivity,
     compute_promo_responsiveness,
     compute_rfm,

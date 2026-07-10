@@ -13,7 +13,7 @@ import duckdb
 import numpy as np
 import pandas as pd
 
-from etl import DATA_DIR, OUTPUT_DIR
+from shopper_segmentation.etl import DATA_DIR, OUTPUT_DIR
 
 SEGMENTS_INPUT = OUTPUT_DIR / "household_segments.parquet"
 PROFILES_INPUT = OUTPUT_DIR / "segment_profiles.json"

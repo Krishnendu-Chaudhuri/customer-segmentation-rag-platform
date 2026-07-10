@@ -11,7 +11,7 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = PROJECT_ROOT / "data"
 OUTPUT_DIR = PROJECT_ROOT / "output"
 DEFAULT_OUTPUT = OUTPUT_DIR / "household_features_raw.parquet"

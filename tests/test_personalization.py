@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from personalization import (
+from shopper_segmentation.personalization import (
     compute_lift,
     compute_uplift_pct,
     diff_in_means_ci,

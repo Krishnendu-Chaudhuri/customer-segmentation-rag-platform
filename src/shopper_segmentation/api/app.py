@@ -11,8 +11,8 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from etl import OUTPUT_DIR
-from rag.rag_chain import answer_query, get_groq_api_key
+from shopper_segmentation.etl import OUTPUT_DIR
+from shopper_segmentation.rag.rag_chain import answer_query, get_groq_api_key
 
 PROFILES_PATH = OUTPUT_DIR / "segment_profiles.json"
 RECOMMENDATIONS_PATH = OUTPUT_DIR / "segment_recommendations.json"

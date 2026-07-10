@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
-from rag.build_cards import build_all_cards, build_segment_card
-from rag.rag_chain import extract_numbers, number_in_context, validate_response_numbers
+from shopper_segmentation.rag.build_cards import build_all_cards
+from shopper_segmentation.rag.rag_chain import (
+    extract_numbers,
+    number_in_context,
+    validate_response_numbers,
+)
 
 
 def test_build_all_cards_count() -> None:

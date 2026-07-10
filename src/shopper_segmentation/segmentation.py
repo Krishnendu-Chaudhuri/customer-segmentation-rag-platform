@@ -17,7 +17,7 @@ from sklearn.metrics import adjusted_rand_score, silhouette_score
 from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import StandardScaler
 
-from etl import OUTPUT_DIR
+from shopper_segmentation.etl import OUTPUT_DIR
 
 FEATURES_INPUT = OUTPUT_DIR / "household_features.parquet"
 SEGMENTS_OUTPUT = OUTPUT_DIR / "household_segments.parquet"

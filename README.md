@@ -42,17 +42,23 @@ flowchart TB
 ## Project Structure
 
 ```
-Shopper Segmentation RAG/
-├── data/                    # 8 dunnhumby CSV files (not committed)
-├── output/                  # Parquet + JSON artifacts (gitignored)
-├── etl.py                   # Module 1: DuckDB load & join
-├── features.py              # Module 2: Feature engineering
-├── segmentation.py          # Module 3: KMeans clustering
-├── personalization.py       # Module 4: Recommendations & uplift
-├── rag/                     # Module 5: RAG chatbot
-├── app.py                   # Module 6: FastAPI backend
-├── frontend/                # Module 7: Streamlit dashboard
-├── tests/                   # pytest unit tests
+shopper-segmentation/
+├── src/
+│   └── shopper_segmentation/
+│       ├── etl.py                   # Module 1: DuckDB load & join
+│       ├── features.py              # Module 2: Feature engineering
+│       ├── segmentation.py          # Module 3: KMeans clustering
+│       ├── personalization.py       # Module 4: Recommendations & uplift
+│       ├── rag/                     # Module 5: RAG chatbot
+│       └── api/
+│           └── app.py               # Module 6: FastAPI backend
+├── frontend/                        # Module 7: Streamlit dashboard
+├── tests/                           # pytest unit tests
+├── scripts/
+│   └── run_pipeline.sh              # Pipeline runner
+├── data/                            # CSV files (gitignored)
+├── output/                          # Artifacts (gitignored)
+├── pyproject.toml
 └── requirements.txt
 ```
 
@@ -64,7 +70,7 @@ Shopper Segmentation RAG/
 cd "Shopper Segmentation RAG"
 python -m venv .venv
 .\.venv\Scripts\activate
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ### 2. Add data files
@@ -90,11 +96,17 @@ The app fails with a clear error if `GROQ_API_KEY` is missing — the key is nev
 ### 4. Run the pipeline
 
 ```powershell
-python etl.py
-python features.py
-python segmentation.py
-python personalization.py
-python -m rag.rag_chain          # builds Chroma index + demo queries
+python -m shopper_segmentation.etl
+python -m shopper_segmentation.features
+python -m shopper_segmentation.segmentation
+python -m shopper_segmentation.personalization
+python -m shopper_segmentation.rag.rag_chain   # builds Chroma index + demo queries
+```
+
+Or use the pipeline script:
+
+```bash
+bash scripts/run_pipeline.sh
 ```
 
 ### 5. Start backend and dashboard
@@ -102,7 +114,7 @@ python -m rag.rag_chain          # builds Chroma index + demo queries
 Terminal 1 — API:
 
 ```powershell
-uvicorn app:app --host 127.0.0.1 --port 8000 --reload
+uvicorn shopper_segmentation.api.app:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 Terminal 2 — Streamlit:
@@ -124,7 +136,7 @@ Open **http://localhost:8501** for the dashboard and **http://127.0.0.1:8000/doc
 
 ## Example Chatbot Q&A
 
-These examples use segment cards retrieved by the RAG pipeline. With `GROQ_API_KEY` set, run `python -m rag.rag_chain` or use the **Analyst Chat** page for live LLM responses.
+These examples use segment cards retrieved by the RAG pipeline. With `GROQ_API_KEY` set, run `python -m shopper_segmentation.rag.rag_chain` or use the **Analyst Chat** page for live LLM responses.
 
 ### Q1: Who are our high-value promo-sensitive shoppers?
 
