@@ -473,8 +473,4 @@ pytest tests/ -v
 
 CI also runs `pip-audit -r requirements.lock --ignore-vuln PYSEC-2026-311` to fail on high/critical CVEs. The ignore is temporary until chromadb releases a fix for CVE-2026-45829; this project uses local `PersistentClient` only and does not expose the ChromaDB FastAPI server.
 
-## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
-
-The dunnhumby Complete Journey dataset is subject to its own license terms and is not included in this repository.
