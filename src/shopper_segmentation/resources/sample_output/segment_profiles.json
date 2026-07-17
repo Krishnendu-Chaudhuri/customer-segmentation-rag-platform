@@ -1,0 +1,163 @@
+{
+  "metadata": {
+    "selected_k": 8,
+    "silhouette_score": 0.41,
+    "gmm_ari_vs_kmeans": 0.88,
+    "mean_bootstrap_ari": 0.79,
+    "source": "bundled_sample_output"
+  },
+  "segments": [
+    {
+      "id": 0,
+      "name": "Budget Essentials Shoppers",
+      "size": 312,
+      "low_confidence": false,
+      "feature_means": {
+        "monetary": 0.35,
+        "frequency": 0.38,
+        "recency": 0.41,
+        "price_sensitivity": 0.44,
+        "promo_responsiveness": 0.47,
+        "display_exposure_rate": 0.5,
+        "mailer_exposure_rate": 0.53,
+        "avg_basket_size": 0.56,
+        "total_spend": 0.59,
+        "dept_grocery_pct": 0.62
+      },
+      "narrative": "Sample segment 0 with 312 households for bundled artifact testing and CI."
+    },
+    {
+      "id": 1,
+      "name": "Promo-Sensitive Regulars",
+      "size": 67,
+      "low_confidence": false,
+      "feature_means": {
+        "monetary": 0.42,
+        "frequency": 0.45,
+        "recency": 0.48,
+        "price_sensitivity": 0.51,
+        "promo_responsiveness": 0.54,
+        "display_exposure_rate": 0.57,
+        "mailer_exposure_rate": 0.6,
+        "avg_basket_size": 0.63,
+        "total_spend": 0.66,
+        "dept_grocery_pct": 0.69
+      },
+      "narrative": "Sample segment 1 with 67 households for bundled artifact testing and CI."
+    },
+    {
+      "id": 2,
+      "name": "Premium Grocery Loyalists",
+      "size": 421,
+      "low_confidence": false,
+      "feature_means": {
+        "monetary": 0.49,
+        "frequency": 0.52,
+        "recency": 0.55,
+        "price_sensitivity": 0.58,
+        "promo_responsiveness": 0.61,
+        "display_exposure_rate": 0.64,
+        "mailer_exposure_rate": 0.67,
+        "avg_basket_size": 0.7,
+        "total_spend": 0.73,
+        "dept_grocery_pct": 0.76
+      },
+      "narrative": "Sample segment 2 with 421 households for bundled artifact testing and CI."
+    },
+    {
+      "id": 3,
+      "name": "Occasional Basket Builders",
+      "size": 298,
+      "low_confidence": false,
+      "feature_means": {
+        "monetary": 0.56,
+        "frequency": 0.59,
+        "recency": 0.62,
+        "price_sensitivity": 0.65,
+        "promo_responsiveness": 0.68,
+        "display_exposure_rate": 0.71,
+        "mailer_exposure_rate": 0.74,
+        "avg_basket_size": 0.77,
+        "total_spend": 0.8,
+        "dept_grocery_pct": 0.83
+      },
+      "narrative": "Sample segment 3 with 298 households for bundled artifact testing and CI."
+    },
+    {
+      "id": 4,
+      "name": "Display-Driven Explorers",
+      "size": 25,
+      "low_confidence": true,
+      "feature_means": {
+        "monetary": 0.63,
+        "frequency": 0.66,
+        "recency": 0.69,
+        "price_sensitivity": 0.72,
+        "promo_responsiveness": 0.75,
+        "display_exposure_rate": 0.78,
+        "mailer_exposure_rate": 0.81,
+        "avg_basket_size": 0.84,
+        "total_spend": 0.87,
+        "dept_grocery_pct": 0.9
+      },
+      "narrative": "Sample segment 4 with 25 households for bundled artifact testing and CI."
+    },
+    {
+      "id": 5,
+      "name": "Mailer Responders",
+      "size": 189,
+      "low_confidence": false,
+      "feature_means": {
+        "monetary": 0.7,
+        "frequency": 0.73,
+        "recency": 0.76,
+        "price_sensitivity": 0.79,
+        "promo_responsiveness": 0.82,
+        "display_exposure_rate": 0.85,
+        "mailer_exposure_rate": 0.88,
+        "avg_basket_size": 0.91,
+        "total_spend": 0.94,
+        "dept_grocery_pct": 0.97
+      },
+      "narrative": "Sample segment 5 with 189 households for bundled artifact testing and CI."
+    },
+    {
+      "id": 6,
+      "name": "Small-Basket Niche Buyers",
+      "size": 18,
+      "low_confidence": true,
+      "feature_means": {
+        "monetary": 0.77,
+        "frequency": 0.8,
+        "recency": 0.83,
+        "price_sensitivity": 0.86,
+        "promo_responsiveness": 0.89,
+        "display_exposure_rate": 0.92,
+        "mailer_exposure_rate": 0.95,
+        "avg_basket_size": 0.98,
+        "total_spend": 1.01,
+        "dept_grocery_pct": 1.04
+      },
+      "narrative": "Sample segment 6 with 18 households for bundled artifact testing and CI."
+    },
+    {
+      "id": 7,
+      "name": "High-Value Frequent Shoppers",
+      "size": 1170,
+      "low_confidence": false,
+      "feature_means": {
+        "monetary": 0.84,
+        "frequency": 0.87,
+        "recency": 0.9,
+        "price_sensitivity": 0.93,
+        "promo_responsiveness": 0.96,
+        "display_exposure_rate": 0.99,
+        "mailer_exposure_rate": 1.02,
+        "avg_basket_size": 1.05,
+        "total_spend": 1.08,
+        "dept_grocery_pct": 1.11
+      },
+      "narrative": "Sample segment 7 with 1170 households for bundled artifact testing and CI."
+    }
+  ]
+}

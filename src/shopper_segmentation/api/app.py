@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import os
 from contextlib import asynccontextmanager
-from functools import lru_cache
-from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
@@ -19,14 +16,17 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from shopper_segmentation.api.auth import verify_api_key
-from shopper_segmentation.etl import OUTPUT_DIR
+from shopper_segmentation.artifacts import (
+    ArtifactError,
+    ensure_artifacts,
+    load_profiles,
+    load_recommendations,
+)
 from shopper_segmentation.rag.rag_chain import answer_query, get_groq_api_key
 from shopper_segmentation.segmentation import MIN_SEGMENT_CONFIDENT_N, is_low_confidence_segment
 
 load_dotenv()
 
-PROFILES_PATH = OUTPUT_DIR / "segment_profiles.json"
-RECOMMENDATIONS_PATH = OUTPUT_DIR / "segment_recommendations.json"
 DEFAULT_ALLOWED_ORIGINS = "http://localhost:8504"
 
 
@@ -146,34 +146,33 @@ def _segment_low_confidence(segment: dict[str, Any]) -> bool:
     return is_low_confidence_segment(int(segment["size"]), MIN_SEGMENT_CONFIDENT_N)
 
 
-@lru_cache
-def _load_profiles() -> dict[str, Any]:
-    """Load segment profiles from disk."""
-    return _read_json(PROFILES_PATH)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Warm cached data on startup."""
+    import logging
+
+    logger = logging.getLogger(__name__)
+    try:
+        ensure_artifacts()
+    except ArtifactError as exc:
+        logger.error("Startup artifact initialization failed: %s", exc)
+    yield
 
 
-@lru_cache
-def _load_recommendations() -> dict[str, Any]:
-    """Load segment recommendations from disk."""
-    return _read_json(RECOMMENDATIONS_PATH)
+def _require_profiles() -> dict[str, Any]:
+    """Load segment profiles or raise a service-unavailable error."""
+    try:
+        return load_profiles()
+    except ArtifactError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
-def _read_json(path: Path) -> dict[str, Any]:
-    """Read and parse a JSON file.
-
-    Args:
-        path: Path to JSON file.
-
-    Returns:
-        Parsed JSON object.
-
-    Raises:
-        HTTPException: If the file is missing.
-    """
-    if not path.exists():
-        raise HTTPException(status_code=500, detail=f"Missing required data file: {path.name}")
-    with path.open(encoding="utf-8") as f:
-        return json.load(f)
+def _require_recommendations() -> dict[str, Any]:
+    """Load segment recommendations or raise a service-unavailable error."""
+    try:
+        return load_recommendations()
+    except ArtifactError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 def _get_segment_profile(segment_id: int) -> dict[str, Any]:
@@ -188,7 +187,7 @@ def _get_segment_profile(segment_id: int) -> dict[str, Any]:
     Raises:
         HTTPException: If segment is not found.
     """
-    profiles = _load_profiles()["segments"]
+    profiles = _require_profiles()["segments"]
     for segment in profiles:
         if int(segment["id"]) == segment_id:
             return segment
@@ -207,18 +206,10 @@ def _get_segment_recommendations(segment_id: int) -> dict[str, Any]:
     Raises:
         HTTPException: If segment is not found.
     """
-    for segment in _load_recommendations()["segments"]:
+    for segment in _require_recommendations()["segments"]:
         if int(segment["segment_id"]) == segment_id:
             return segment
     raise HTTPException(status_code=404, detail=f"Segment {segment_id} not found")
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Warm cached data on startup."""
-    _load_profiles()
-    _load_recommendations()
-    yield
 
 
 app = FastAPI(
@@ -255,7 +246,7 @@ def list_segments() -> list[SegmentSummary]:
             narrative=str(segment["narrative"]),
             low_confidence=_segment_low_confidence(segment),
         )
-        for segment in _load_profiles()["segments"]
+        for segment in _require_profiles()["segments"]
     ]
 
 

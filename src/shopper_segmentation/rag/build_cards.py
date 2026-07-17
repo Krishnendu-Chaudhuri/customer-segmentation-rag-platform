@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
-from shopper_segmentation.etl import OUTPUT_DIR
-
-PROFILES_PATH = OUTPUT_DIR / "segment_profiles.json"
-RECOMMENDATIONS_PATH = OUTPUT_DIR / "segment_recommendations.json"
-UPLIFT_PATH = OUTPUT_DIR / "uplift_report.json"
+from shopper_segmentation import artifacts
+from shopper_segmentation.paths import (
+    profiles_path as default_profiles_path,
+)
+from shopper_segmentation.paths import (
+    recommendations_path as default_recommendations_path,
+)
+from shopper_segmentation.paths import (
+    uplift_path as default_uplift_path,
+)
 
 TOP_FEATURE_KEYS = [
     "monetary",
@@ -23,19 +27,6 @@ TOP_FEATURE_KEYS = [
     "total_spend",
     "dept_grocery_pct",
 ]
-
-
-def load_json(path: Path) -> dict[str, object]:
-    """Load a JSON file from disk.
-
-    Args:
-        path: Path to JSON file.
-
-    Returns:
-        Parsed JSON object.
-    """
-    with path.open(encoding="utf-8") as f:
-        return json.load(f)
 
 
 def _index_by_segment_id(items: list[dict[str, object]], key: str = "segment_id") -> dict[int, dict]:
@@ -149,23 +140,39 @@ def build_segment_card(
 
 
 def build_all_cards(
-    profiles_path: Path = PROFILES_PATH,
-    recommendations_path: Path = RECOMMENDATIONS_PATH,
-    uplift_path: Path = UPLIFT_PATH,
+    profiles_file: Path | None = None,
+    recommendations_file: Path | None = None,
+    uplift_file: Path | None = None,
 ) -> list[dict[str, object]]:
     """Build markdown cards for all segments.
 
     Args:
-        profiles_path: Path to segment_profiles.json.
-        recommendations_path: Path to segment_recommendations.json.
-        uplift_path: Path to uplift_report.json.
+        profiles_file: Optional override path to segment_profiles.json.
+        recommendations_file: Optional override path to segment_recommendations.json.
+        uplift_file: Optional override path to uplift_report.json.
 
     Returns:
         List of card dicts with segment_id, segment_name, and content.
+
+    Raises:
+        ArtifactError: When required artifacts cannot be loaded or generated.
     """
-    profiles = load_json(profiles_path)
-    recommendations = load_json(recommendations_path)
-    uplift = load_json(uplift_path)
+    if profiles_file is None and recommendations_file is None and uplift_file is None:
+        artifacts.ensure_artifacts()
+        profiles = artifacts.load_profiles()
+        recommendations = artifacts.load_recommendations()
+        uplift = artifacts.load_uplift()
+    else:
+        artifacts.ensure_artifacts()
+        import json
+
+        def _load(path: Path) -> dict[str, object]:
+            with path.open(encoding="utf-8") as handle:
+                return json.load(handle)
+
+        profiles = _load(profiles_file or default_profiles_path())
+        recommendations = _load(recommendations_file or default_recommendations_path())
+        uplift = _load(uplift_file or default_uplift_path())
 
     rec_by_id = _index_by_segment_id(recommendations["segments"])
     uplift_by_id = _index_by_segment_id(uplift["segments"])

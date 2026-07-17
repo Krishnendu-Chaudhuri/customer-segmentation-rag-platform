@@ -7,7 +7,6 @@ household-level metrics, and writes household_features_raw.parquet.
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 
 import duckdb
@@ -15,16 +14,21 @@ import pandas as pd
 from dotenv import load_dotenv
 
 from shopper_segmentation.logging_config import configure_logging
+from shopper_segmentation.paths import DATA_DIR, OUTPUT_DIR, PROJECT_ROOT, raw_features_path
+
+__all__ = [
+    "DATA_DIR",
+    "DEFAULT_OUTPUT",
+    "OUTPUT_DIR",
+    "PROJECT_ROOT",
+]
 from shopper_segmentation.schema import validate_csv_schema
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = Path(os.environ.get("DATA_DIR", PROJECT_ROOT / "data"))
-OUTPUT_DIR = Path(os.environ.get("OUTPUT_DIR", PROJECT_ROOT / "output"))
-DEFAULT_OUTPUT = OUTPUT_DIR / "household_features_raw.parquet"
+DEFAULT_OUTPUT = raw_features_path()
 
 
 def get_data_paths(data_dir: Path = DATA_DIR) -> dict[str, Path]:

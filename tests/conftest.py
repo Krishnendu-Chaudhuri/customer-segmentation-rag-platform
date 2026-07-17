@@ -8,6 +8,14 @@ from fastapi.testclient import TestClient
 TEST_API_KEY = "test-secret-key"
 
 
+@pytest.fixture(scope="session", autouse=True)
+def initialize_artifacts() -> None:
+    """Ensure pipeline artifacts exist before any tests run."""
+    from shopper_segmentation.artifacts import ensure_artifacts
+
+    ensure_artifacts()
+
+
 @pytest.fixture(autouse=True)
 def api_key_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Set API_KEY for all tests."""

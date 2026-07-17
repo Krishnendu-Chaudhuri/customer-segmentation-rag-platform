@@ -1,0 +1,146 @@
+{
+  "metadata": {
+    "top_n": 10,
+    "min_segment_support": 10,
+    "min_population_rate": 0.001,
+    "source": "bundled_sample_output"
+  },
+  "segments": [
+    {
+      "segment_id": 0,
+      "segment_name": "Budget Essentials Shoppers",
+      "recommendations": [
+        {
+          "product_id": 101,
+          "department": "GROCERY",
+          "brand": "Brand0",
+          "commodity_desc": "Commodity0",
+          "lift": 1.5,
+          "segment_purchase_rate": 0.12,
+          "population_purchase_rate": 0.05,
+          "segment_buyers": 62,
+          "segment_size": 312
+        }
+      ]
+    },
+    {
+      "segment_id": 1,
+      "segment_name": "Promo-Sensitive Regulars",
+      "recommendations": [
+        {
+          "product_id": 102,
+          "department": "GROCERY",
+          "brand": "Brand1",
+          "commodity_desc": "Commodity1",
+          "lift": 1.75,
+          "segment_purchase_rate": 0.13,
+          "population_purchase_rate": 0.055,
+          "segment_buyers": 13,
+          "segment_size": 67
+        }
+      ]
+    },
+    {
+      "segment_id": 2,
+      "segment_name": "Premium Grocery Loyalists",
+      "recommendations": [
+        {
+          "product_id": 103,
+          "department": "GROCERY",
+          "brand": "Brand2",
+          "commodity_desc": "Commodity2",
+          "lift": 2.0,
+          "segment_purchase_rate": 0.14,
+          "population_purchase_rate": 0.06,
+          "segment_buyers": 84,
+          "segment_size": 421
+        }
+      ]
+    },
+    {
+      "segment_id": 3,
+      "segment_name": "Occasional Basket Builders",
+      "recommendations": [
+        {
+          "product_id": 104,
+          "department": "GROCERY",
+          "brand": "Brand3",
+          "commodity_desc": "Commodity3",
+          "lift": 2.25,
+          "segment_purchase_rate": 0.15,
+          "population_purchase_rate": 0.065,
+          "segment_buyers": 59,
+          "segment_size": 298
+        }
+      ]
+    },
+    {
+      "segment_id": 4,
+      "segment_name": "Display-Driven Explorers",
+      "recommendations": [
+        {
+          "product_id": 105,
+          "department": "GROCERY",
+          "brand": "Brand4",
+          "commodity_desc": "Commodity4",
+          "lift": 2.5,
+          "segment_purchase_rate": 0.16,
+          "population_purchase_rate": 0.07,
+          "segment_buyers": 10,
+          "segment_size": 25
+        }
+      ]
+    },
+    {
+      "segment_id": 5,
+      "segment_name": "Mailer Responders",
+      "recommendations": [
+        {
+          "product_id": 106,
+          "department": "GROCERY",
+          "brand": "Brand5",
+          "commodity_desc": "Commodity5",
+          "lift": 2.75,
+          "segment_purchase_rate": 0.17,
+          "population_purchase_rate": 0.075,
+          "segment_buyers": 37,
+          "segment_size": 189
+        }
+      ]
+    },
+    {
+      "segment_id": 6,
+      "segment_name": "Small-Basket Niche Buyers",
+      "recommendations": [
+        {
+          "product_id": 107,
+          "department": "GROCERY",
+          "brand": "Brand6",
+          "commodity_desc": "Commodity6",
+          "lift": 3.0,
+          "segment_purchase_rate": 0.18,
+          "population_purchase_rate": 0.08,
+          "segment_buyers": 10,
+          "segment_size": 18
+        }
+      ]
+    },
+    {
+      "segment_id": 7,
+      "segment_name": "High-Value Frequent Shoppers",
+      "recommendations": [
+        {
+          "product_id": 108,
+          "department": "GROCERY",
+          "brand": "Brand7",
+          "commodity_desc": "Commodity7",
+          "lift": 3.25,
+          "segment_purchase_rate": 0.19,
+          "population_purchase_rate": 0.085,
+          "segment_buyers": 234,
+          "segment_size": 1170
+        }
+      ]
+    }
+  ]
+}
