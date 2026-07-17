@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
+import os
+import sys
+
 import streamlit as st
 
-from frontend.path_setup import ensure_project_root
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+if CURRENT_DIR not in sys.path:
+    sys.path.insert(0, CURRENT_DIR)
+
+from path_setup import ensure_project_root
 
 ensure_project_root()
 

@@ -6,6 +6,7 @@ demographic features per household_key. Outputs household_features.parquet.
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
 
@@ -13,6 +14,9 @@ import duckdb
 import pandas as pd
 
 from shopper_segmentation.etl import DATA_DIR, OUTPUT_DIR
+from shopper_segmentation.logging_config import configure_logging
+
+logger = logging.getLogger(__name__)
 
 RAW_INPUT = OUTPUT_DIR / "household_features_raw.parquet"
 DEFAULT_OUTPUT = OUTPUT_DIR / "household_features.parquet"
@@ -397,23 +401,16 @@ def run_features(
 
 
 def main() -> None:
-    """Run feature engineering and print schema plus summary statistics."""
-    print("=" * 72)
-    print("Module 2: Feature Engineering")
-    print("=" * 72)
+    """Run feature engineering and log schema plus summary statistics."""
+    configure_logging()
+    logger.info("Module 2: Feature Engineering")
 
     df = run_features()
-    print(f"\n--- Row Count: {len(df):,} ---\n")
-    print("--- Schema ---\n")
-    print(df.dtypes.to_string())
-
-    print("\n--- Sample Rows (first 5) ---\n")
-    print(df.head(5).to_string(index=False))
-
-    print("\n--- Summary Statistics (describe) ---\n")
-    print(df.describe().to_string())
-
-    print(f"\n--- Output written to: {DEFAULT_OUTPUT} ---")
+    logger.info("Loaded %s households", f"{len(df):,}")
+    logger.info("Schema:\n%s", df.dtypes.to_string())
+    logger.info("Sample rows (first 5):\n%s", df.head(5).to_string(index=False))
+    logger.info("Summary statistics:\n%s", df.describe().to_string())
+    logger.info("Output written to: %s", DEFAULT_OUTPUT)
 
 
 if __name__ == "__main__":

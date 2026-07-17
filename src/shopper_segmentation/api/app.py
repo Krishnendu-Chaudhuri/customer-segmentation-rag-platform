@@ -3,19 +3,59 @@
 from __future__ import annotations
 
 import json
+import os
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
+from shopper_segmentation.api.auth import verify_api_key
 from shopper_segmentation.etl import OUTPUT_DIR
 from shopper_segmentation.rag.rag_chain import answer_query, get_groq_api_key
+from shopper_segmentation.segmentation import MIN_SEGMENT_CONFIDENT_N, is_low_confidence_segment
+
+load_dotenv()
 
 PROFILES_PATH = OUTPUT_DIR / "segment_profiles.json"
 RECOMMENDATIONS_PATH = OUTPUT_DIR / "segment_recommendations.json"
+DEFAULT_ALLOWED_ORIGINS = "http://localhost:8504"
+
+
+def get_rate_limit_key(request: Request) -> str:
+    """Return rate-limit bucket key from API key or client IP.
+
+    Args:
+        request: Incoming HTTP request.
+
+    Returns:
+        Identifier used for rate limiting.
+    """
+    api_key = request.headers.get("X-API-Key")
+    if api_key:
+        return api_key
+    return get_remote_address(request)
+
+
+def get_allowed_origins() -> list[str]:
+    """Parse comma-separated CORS origins from environment.
+
+    Returns:
+        List of allowed origin URLs.
+    """
+    raw = os.getenv("ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS)
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
+limiter = Limiter(key_func=get_rate_limit_key)
 
 
 class SegmentSummary(BaseModel):
@@ -25,6 +65,7 @@ class SegmentSummary(BaseModel):
     name: str
     size: int
     narrative: str
+    low_confidence: bool
 
 
 class SegmentDetail(BaseModel):
@@ -35,6 +76,7 @@ class SegmentDetail(BaseModel):
     size: int
     narrative: str
     feature_means: dict[str, float]
+    low_confidence: bool
 
 
 class ProductRecommendation(BaseModel):
@@ -88,6 +130,20 @@ class ChatResponse(BaseModel):
     answer: str
     retrieved_segments: list[RetrievedSegment]
     validation: ValidationResult
+
+
+def _segment_low_confidence(segment: dict[str, Any]) -> bool:
+    """Return whether a segment should be flagged as low confidence.
+
+    Args:
+        segment: Segment profile dictionary.
+
+    Returns:
+        True when the segment is below the configured household threshold.
+    """
+    if "low_confidence" in segment:
+        return bool(segment["low_confidence"])
+    return is_low_confidence_segment(int(segment["size"]), MIN_SEGMENT_CONFIDENT_N)
 
 
 @lru_cache
@@ -174,9 +230,21 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_allowed_origins(),
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "X-API-Key"],
+)
+
+protected = [Depends(verify_api_key)]
 
 
-@app.get("/segments", response_model=list[SegmentSummary], tags=["segments"])
+@app.get("/segments", response_model=list[SegmentSummary], tags=["segments"], dependencies=protected)
 def list_segments() -> list[SegmentSummary]:
     """List all shopper segments with summary metadata."""
     return [
@@ -185,12 +253,18 @@ def list_segments() -> list[SegmentSummary]:
             name=str(segment["name"]),
             size=int(segment["size"]),
             narrative=str(segment["narrative"]),
+            low_confidence=_segment_low_confidence(segment),
         )
         for segment in _load_profiles()["segments"]
     ]
 
 
-@app.get("/segments/{segment_id}", response_model=SegmentDetail, tags=["segments"])
+@app.get(
+    "/segments/{segment_id}",
+    response_model=SegmentDetail,
+    tags=["segments"],
+    dependencies=protected,
+)
 def get_segment(segment_id: int) -> SegmentDetail:
     """Get detailed profile for a single segment."""
     segment = _get_segment_profile(segment_id)
@@ -200,6 +274,7 @@ def get_segment(segment_id: int) -> SegmentDetail:
         size=int(segment["size"]),
         narrative=str(segment["narrative"]),
         feature_means={k: float(v) for k, v in segment["feature_means"].items()},
+        low_confidence=_segment_low_confidence(segment),
     )
 
 
@@ -207,6 +282,7 @@ def get_segment(segment_id: int) -> SegmentDetail:
     "/segments/{segment_id}/recommendations",
     response_model=SegmentRecommendations,
     tags=["segments"],
+    dependencies=protected,
 )
 def get_recommendations(segment_id: int) -> SegmentRecommendations:
     """Get top product recommendations for a segment."""
@@ -232,8 +308,9 @@ def get_recommendations(segment_id: int) -> SegmentRecommendations:
     )
 
 
-@app.post("/chat", response_model=ChatResponse, tags=["chat"])
-def chat(request: ChatRequest) -> ChatResponse:
+@app.post("/chat", response_model=ChatResponse, tags=["chat"], dependencies=protected)
+@limiter.limit("10/minute")
+async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     """Ask the analyst chatbot a question about segments and promotions."""
     try:
         get_groq_api_key()
@@ -241,7 +318,7 @@ def chat(request: ChatRequest) -> ChatResponse:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     try:
-        result = answer_query(request.query)
+        result = await run_in_threadpool(answer_query, body.query)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Chat request failed: {exc}") from exc
 

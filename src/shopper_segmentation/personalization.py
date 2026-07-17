@@ -7,6 +7,7 @@ for campaign-exposed households vs matched segment controls.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 import duckdb
@@ -14,6 +15,9 @@ import numpy as np
 import pandas as pd
 
 from shopper_segmentation.etl import DATA_DIR, OUTPUT_DIR
+from shopper_segmentation.logging_config import configure_logging
+
+logger = logging.getLogger(__name__)
 
 SEGMENTS_INPUT = OUTPUT_DIR / "household_segments.parquet"
 PROFILES_INPUT = OUTPUT_DIR / "segment_profiles.json"
@@ -474,36 +478,39 @@ def run_personalization(
 
 
 def main() -> None:
-    """Run personalization and print recommendation and uplift summaries."""
-    print("=" * 72)
-    print("Module 4: Personalization — Recommendations & Uplift")
-    print("=" * 72)
+    """Run personalization and log recommendation and uplift summaries."""
+    configure_logging()
+    logger.info("Module 4: Personalization — Recommendations & Uplift")
 
     recommendations, uplift = run_personalization()
 
-    print("\n--- Segment Recommendations (top 3 products each) ---\n")
     for segment in recommendations["segments"]:
-        print(f"Segment {segment['segment_id']}: {segment['segment_name']}")
+        logger.info(
+            "Segment %s: %s",
+            segment["segment_id"],
+            segment["segment_name"],
+        )
         for rec in segment["recommendations"][:3]:
-            print(
-                f"  Product {rec['product_id']} ({rec['department']}) — "
-                f"lift {rec['lift']:.2f}, "
-                f"segment rate {rec['segment_purchase_rate']:.3f}"
+            logger.info(
+                "  Product %s (%s) — lift %.2f, segment rate %.3f",
+                rec["product_id"],
+                rec["department"],
+                rec["lift"],
+                rec["segment_purchase_rate"],
             )
-        print()
 
-    print("--- Uplift Report (segment summary) ---\n")
     for segment in uplift["segments"]:
-        print(
-            f"Segment {segment['segment_id']}: {segment['segment_name']} — "
-            f"{segment['incremental_spend_pct']:+.1f}% incremental spend "
-            f"[{segment['incremental_spend_pct_ci_lower']:+.1f}%, "
-            f"{segment['incremental_spend_pct_ci_upper']:+.1f}%]"
+        logger.info(
+            "Segment %s: %s — %+.1f%% incremental spend [%+.1f%%, %+.1f%%]",
+            segment["segment_id"],
+            segment["segment_name"],
+            segment["incremental_spend_pct"],
+            segment["incremental_spend_pct_ci_lower"],
+            segment["incremental_spend_pct_ci_upper"],
         )
 
-    print(f"\n--- Outputs ---")
-    print(f"Recommendations: {RECOMMENDATIONS_OUTPUT}")
-    print(f"Uplift report: {UPLIFT_OUTPUT}")
+    logger.info("Recommendations output: %s", RECOMMENDATIONS_OUTPUT)
+    logger.info("Uplift report output: %s", UPLIFT_OUTPUT)
 
 
 if __name__ == "__main__":

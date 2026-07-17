@@ -9,9 +9,11 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from cachetools import TTLCache
 from dotenv import load_dotenv
 from groq import Groq
 
+from shopper_segmentation.logging_config import configure_logging
 from shopper_segmentation.rag.embed_store import retrieve_cards
 
 load_dotenv()
@@ -21,6 +23,14 @@ logger = logging.getLogger(__name__)
 GROQ_MODEL = "llama3-70b-8192"
 MAX_RETRIES = 5
 INITIAL_BACKOFF_SECONDS = 2.0
+DEFAULT_CHAT_CACHE_TTL_SECONDS = 3600
+CHAT_CACHE_TTL_SECONDS = int(
+    os.getenv("CHAT_CACHE_TTL_SECONDS", str(DEFAULT_CHAT_CACHE_TTL_SECONDS))
+)
+_chat_cache: TTLCache[str, dict[str, object]] = TTLCache(
+    maxsize=256,
+    ttl=CHAT_CACHE_TTL_SECONDS,
+)
 
 SYSTEM_PROMPT = """You are a retail analytics assistant for a shopper segmentation project.
 Answer ONLY using the segment context provided below.
@@ -202,6 +212,23 @@ def call_with_retry(
     raise last_error
 
 
+def _normalize_query(query: str) -> str:
+    """Normalize a query string for cache lookup.
+
+    Args:
+        query: Raw user query.
+
+    Returns:
+        Lowercased, whitespace-trimmed cache key.
+    """
+    return query.strip().lower()
+
+
+def clear_chat_cache() -> None:
+    """Clear the in-memory chat response cache."""
+    _chat_cache.clear()
+
+
 def answer_query(
     query: str,
     top_k: int = 3,
@@ -217,6 +244,11 @@ def answer_query(
     Returns:
         Dictionary with answer, retrieved cards, and validation metadata.
     """
+    cache_key = _normalize_query(query)
+    if cache_key in _chat_cache:
+        logger.info("Chat cache hit for query: %s", query)
+        return _chat_cache[cache_key]
+
     retrieved = retrieve_cards(query, top_k=top_k)
     context = "\n\n---\n\n".join(str(card["content"]) for card in retrieved)
     messages = build_messages(query, retrieved)
@@ -234,21 +266,20 @@ def answer_query(
     answer = response.choices[0].message.content or ""
     validation = validate_response_numbers(answer, context)
 
-    return {
+    result = {
         "query": query,
         "answer": answer,
         "retrieved_cards": retrieved,
         "validation": validation,
     }
+    _chat_cache[cache_key] = result
+    return result
 
 
 def main() -> None:
     """Run demo queries against the RAG chain."""
-    logging.basicConfig(level=logging.INFO)
-
-    print("=" * 72)
-    print("Module 5: RAG — Explainability Chatbot")
-    print("=" * 72)
+    configure_logging()
+    logger.info("Module 5: RAG — Explainability Chatbot")
 
     demo_queries = [
         "Who are our high-value promo-sensitive shoppers?",
@@ -260,27 +291,31 @@ def main() -> None:
         has_key = True
     except RuntimeError as exc:
         has_key = False
-        print(f"\nNote: {exc}\n")
-        print("Showing retrieval results only (no LLM call).\n")
+        logger.warning("%s", exc)
+        logger.info("Showing retrieval results only (no LLM call).")
 
     for query in demo_queries:
-        print(f"\n--- Query: {query} ---\n")
+        logger.info("Query: %s", query)
         retrieved = retrieve_cards(query, top_k=3)
-        print("Retrieved segments:", [c["segment_name"] for c in retrieved])
+        logger.info(
+            "Retrieved segments: %s",
+            [c["segment_name"] for c in retrieved],
+        )
 
         if not has_key:
-            print("\nTop retrieved card preview:")
-            print(str(retrieved[0]["content"])[:600])
-            print("...")
+            logger.info(
+                "Top retrieved card preview:\n%s\n...",
+                str(retrieved[0]["content"])[:600],
+            )
             continue
 
         result = answer_query(query, client=get_groq_client())
-        print(result["answer"])
+        logger.info("%s", result["answer"])
         validation = result["validation"]
         if validation["unsupported_numbers"]:
-            print("Validation flags:", validation["unsupported_numbers"])
+            logger.warning("Validation flags: %s", validation["unsupported_numbers"])
         else:
-            print("Validation: all cited numbers found in context.")
+            logger.info("Validation: all cited numbers found in context.")
 
 
 if __name__ == "__main__":

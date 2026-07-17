@@ -21,11 +21,19 @@ except RuntimeError as exc:
     st.stop()
 
 segment_names = {int(s["id"]): str(s["name"]) for s in segments}
+segment_meta = {int(s["id"]): s for s in segments}
 selected_id = st.selectbox(
     "Select segment",
     options=[int(s["id"]) for s in segments],
     format_func=lambda sid: f"{sid}: {segment_names[sid]}",
 )
+
+selected_segment = segment_meta[selected_id]
+if selected_segment.get("low_confidence"):
+    st.warning(
+        f"Segment {selected_id} has only {selected_segment['size']} households — "
+        "product lift estimates may be unstable."
+    )
 
 try:
     payload = get_recommendations(selected_id)

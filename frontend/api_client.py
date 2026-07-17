@@ -19,6 +19,14 @@ def get_api_base_url() -> str:
     return os.getenv("API_BASE_URL", DEFAULT_API_BASE).rstrip("/")
 
 
+def _auth_headers() -> dict[str, str]:
+    """Return API authentication headers when API_KEY is configured."""
+    api_key = os.getenv("API_KEY")
+    if api_key:
+        return {"X-API-Key": api_key}
+    return {}
+
+
 def _request(method: str, path: str, **kwargs: Any) -> Any:
     """Perform an HTTP request against the backend API.
 
@@ -34,9 +42,11 @@ def _request(method: str, path: str, **kwargs: Any) -> Any:
         RuntimeError: If the API is unreachable or returns an error.
     """
     url = f"{get_api_base_url()}{path}"
+    headers = kwargs.pop("headers", {})
+    headers = {**_auth_headers(), **headers}
     try:
         with httpx.Client(timeout=120.0) as client:
-            response = client.request(method, url, **kwargs)
+            response = client.request(method, url, headers=headers, **kwargs)
             response.raise_for_status()
             return response.json()
     except httpx.ConnectError as exc:

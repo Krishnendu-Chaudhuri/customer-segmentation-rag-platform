@@ -8,5 +8,11 @@ output/*
 data/*.csv
 output/chroma/
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
 *.egg-info/
+dist/
+build/
+.coverage
+htmlcov/
 notebooks/.ipynb_checkpoints/

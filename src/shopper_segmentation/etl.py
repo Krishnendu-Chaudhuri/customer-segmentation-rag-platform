@@ -6,14 +6,24 @@ household-level metrics, and writes household_features_raw.parquet.
 
 from __future__ import annotations
 
+import logging
+import os
 from pathlib import Path
 
 import duckdb
 import pandas as pd
+from dotenv import load_dotenv
+
+from shopper_segmentation.logging_config import configure_logging
+from shopper_segmentation.schema import validate_csv_schema
+
+load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = PROJECT_ROOT / "data"
-OUTPUT_DIR = PROJECT_ROOT / "output"
+DATA_DIR = Path(os.environ.get("DATA_DIR", PROJECT_ROOT / "data"))
+OUTPUT_DIR = Path(os.environ.get("OUTPUT_DIR", PROJECT_ROOT / "output"))
 DEFAULT_OUTPUT = OUTPUT_DIR / "household_features_raw.parquet"
 
 
@@ -120,6 +130,7 @@ def run_etl(
         The SQL query that was executed.
     """
     paths = get_data_paths(data_dir)
+    validate_csv_schema(data_dir)
     for name, path in paths.items():
         if not path.exists():
             raise FileNotFoundError(f"Missing required file for {name}: {path}")
@@ -151,24 +162,18 @@ def load_and_summarize(output_path: Path = DEFAULT_OUTPUT) -> pd.DataFrame:
 
 
 def main() -> None:
-    """Run ETL, print the query, sample rows, and summary statistics."""
-    print("=" * 72)
-    print("Module 1: ETL — Load & Join")
-    print("=" * 72)
+    """Run ETL and log query, sample rows, and summary statistics."""
+    configure_logging()
+    logger.info("Module 1: ETL — Load & Join")
 
     query = run_etl()
-    print("\n--- DuckDB Query ---\n")
-    print(query.strip())
+    logger.info("DuckDB query:\n%s", query.strip())
 
     df = load_and_summarize()
-    print(f"\n--- Row Count: {len(df):,} ---\n")
-    print("--- Sample Rows (first 10) ---\n")
-    print(df.head(10).to_string(index=False))
-
-    print("\n--- Summary Statistics (describe) ---\n")
-    print(df.describe().to_string())
-
-    print(f"\n--- Output written to: {DEFAULT_OUTPUT} ---")
+    logger.info("Loaded %s households", f"{len(df):,}")
+    logger.info("Sample rows (first 10):\n%s", df.head(10).to_string(index=False))
+    logger.info("Summary statistics:\n%s", df.describe().to_string())
+    logger.info("Output written to: %s", DEFAULT_OUTPUT)
 
 
 if __name__ == "__main__":

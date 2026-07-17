@@ -28,6 +28,7 @@ except RuntimeError as exc:
     st.stop()
 
 segment_names = {int(s["id"]): str(s["name"]) for s in segments}
+low_confidence_ids = {int(s["id"]) for s in segments if s.get("low_confidence")}
 scatter_df = load_segment_scatter_data()
 population_means = load_population_feature_means()
 
@@ -48,6 +49,12 @@ with col2:
     )
     st.plotly_chart(fig_bar, use_container_width=True)
 
+if low_confidence_ids:
+    st.warning(
+        "Low-confidence segments (fewer than 30 households): "
+        + ", ".join(f"Segment {sid}" for sid in sorted(low_confidence_ids))
+    )
+
 st.subheader("Segment Radar Profile")
 selected_id = st.selectbox(
     "Select segment for radar comparison vs population",
@@ -57,6 +64,11 @@ selected_id = st.selectbox(
 
 try:
     detail = get_segment(selected_id)
+    if detail.get("low_confidence"):
+        st.warning(
+            f"Segment {selected_id} has only {detail['size']} households — "
+            "interpret profiles and comparisons with caution."
+        )
     st.plotly_chart(
         build_radar_chart(
             segment_name=str(detail["name"]),

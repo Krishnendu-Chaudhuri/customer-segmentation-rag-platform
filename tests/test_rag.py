@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from shopper_segmentation.rag.build_cards import build_all_cards
 from shopper_segmentation.rag.rag_chain import (
+    answer_query,
+    clear_chat_cache,
     extract_numbers,
     number_in_context,
     validate_response_numbers,
@@ -51,3 +53,22 @@ def test_number_in_context_allows_rounding() -> None:
     context = "lift 10.66 and segment rate 0.149"
     assert number_in_context("10.66", context)
     assert number_in_context("0.149", context)
+
+
+def test_answer_query_uses_cache_for_identical_questions() -> None:
+    """Repeated identical queries should not call Groq more than once."""
+    from unittest.mock import MagicMock, patch
+
+    clear_chat_cache()
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock(message=MagicMock(content="Cached answer 42."))]
+    mock_client.chat.completions.create.return_value = mock_response
+
+    with patch("shopper_segmentation.rag.rag_chain.retrieve_cards", return_value=[]):
+        with patch("shopper_segmentation.rag.rag_chain.get_groq_client", return_value=mock_client):
+            answer_query("Who are promo-sensitive shoppers?")
+            answer_query("Who are promo-sensitive shoppers?")
+
+    assert mock_client.chat.completions.create.call_count == 1
+    clear_chat_cache()

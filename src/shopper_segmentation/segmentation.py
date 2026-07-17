@@ -7,6 +7,8 @@ with GaussianMixture, evaluates bootstrap stability, and writes segment profiles
 from __future__ import annotations
 
 import json
+import logging
+import os
 from pathlib import Path
 
 import numpy as np
@@ -18,6 +20,9 @@ from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import StandardScaler
 
 from shopper_segmentation.etl import OUTPUT_DIR
+from shopper_segmentation.logging_config import configure_logging
+
+logger = logging.getLogger(__name__)
 
 FEATURES_INPUT = OUTPUT_DIR / "household_features.parquet"
 SEGMENTS_OUTPUT = OUTPUT_DIR / "household_segments.parquet"
@@ -28,6 +33,7 @@ K_RANGE = range(4, 9)
 BOOTSTRAP_RUNS = 10
 BOOTSTRAP_FRACTION = 0.8
 RANDOM_STATE = 42
+MIN_SEGMENT_CONFIDENT_N = int(os.getenv("MIN_SEGMENT_CONFIDENT_N", "30"))
 
 NAMING_FEATURES = [
     "monetary",
@@ -375,6 +381,19 @@ def build_segment_narrative(
     )
 
 
+def is_low_confidence_segment(size: int, threshold: int = MIN_SEGMENT_CONFIDENT_N) -> bool:
+    """Return True when a segment is too small for high-confidence interpretation.
+
+    Args:
+        size: Number of households in the segment.
+        threshold: Minimum household count for confident profiling.
+
+    Returns:
+        True if segment size is below the threshold.
+    """
+    return size < threshold
+
+
 def build_segment_profiles(
     df: pd.DataFrame,
     labels: np.ndarray,
@@ -419,6 +438,7 @@ def build_segment_profiles(
                 "id": segment_id,
                 "name": name,
                 "size": size,
+                "low_confidence": is_low_confidence_segment(size),
                 "feature_means": feature_means,
                 "narrative": narrative,
             }
@@ -502,35 +522,42 @@ def run_segmentation(
 
 
 def main() -> None:
-    """Run segmentation and print evaluation metrics and segment summaries."""
-    print("=" * 72)
-    print("Module 3: Segmentation")
-    print("=" * 72)
+    """Run segmentation and log evaluation metrics and segment summaries."""
+    configure_logging()
+    logger.info("Module 3: Segmentation")
 
     profiles = run_segmentation()
     metadata = profiles["metadata"]
 
-    print("\n--- K Evaluation (k=4..8) ---\n")
-    print(pd.DataFrame(metadata["k_evaluation"]).to_string(index=False))
+    logger.info(
+        "K evaluation (k=4..8):\n%s",
+        pd.DataFrame(metadata["k_evaluation"]).to_string(index=False),
+    )
+    logger.info("Selected k: %s", metadata["selected_k"])
+    logger.info("Silhouette score: %.4f", metadata["silhouette_score"])
+    logger.info("GMM ARI vs KMeans: %.4f", metadata["gmm_ari_vs_kmeans"])
+    logger.info(
+        "Mean bootstrap ARI (10 runs @ 80%%): %.4f",
+        metadata["mean_bootstrap_ari"],
+    )
 
-    print(f"\n--- Selected k: {metadata['selected_k']} ---")
-    print(f"Silhouette score: {metadata['silhouette_score']:.4f}")
-    print(f"GMM ARI vs KMeans: {metadata['gmm_ari_vs_kmeans']:.4f}")
-    print(f"Mean bootstrap ARI (10 runs @ 80%): {metadata['mean_bootstrap_ari']:.4f}")
-
-    print("\n--- Segment Summary ---\n")
     for segment in profiles["segments"]:
-        print(f"Segment {segment['id']}: {segment['name']} ({segment['size']:,} households)")
-        print(f"  {segment['narrative']}\n")
+        logger.info(
+            "Segment %s: %s (%s households, low_confidence=%s)",
+            segment["id"],
+            segment["name"],
+            f"{segment['size']:,}",
+            segment["low_confidence"],
+        )
+        logger.info("  %s", segment["narrative"])
 
-    print("--- Profile Markdown Table (preview) ---\n")
-    print(str(profiles["profile_markdown"])[:2000])
-    print("\n...")
-
-    print(f"\n--- Outputs ---")
-    print(f"Segments: {SEGMENTS_OUTPUT}")
-    print(f"Profiles: {PROFILES_OUTPUT}")
-    print(f"Profile table: {PROFILE_TABLE_OUTPUT}")
+    logger.info(
+        "Profile markdown preview:\n%s\n...",
+        str(profiles["profile_markdown"])[:2000],
+    )
+    logger.info("Segments output: %s", SEGMENTS_OUTPUT)
+    logger.info("Profiles output: %s", PROFILES_OUTPUT)
+    logger.info("Profile table output: %s", PROFILE_TABLE_OUTPUT)
 
 
 if __name__ == "__main__":
