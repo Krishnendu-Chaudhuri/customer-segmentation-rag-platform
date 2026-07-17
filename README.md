@@ -471,7 +471,7 @@ ruff check src tests frontend
 pytest tests/ -v
 ```
 
-CI also runs `pip-audit -r requirements.lock` to fail on high/critical CVEs.
+CI also runs `pip-audit -r requirements.lock --ignore-vuln PYSEC-2026-311` to fail on high/critical CVEs. The ignore is temporary until chromadb releases a fix for CVE-2026-45829; this project uses local `PersistentClient` only and does not expose the ChromaDB FastAPI server.
 
 ## License
 
