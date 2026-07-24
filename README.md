@@ -317,6 +317,20 @@ Protected routes require the `X-API-Key` header. `/chat` returns 503 if `GROQ_AP
 | Vector store | ChromaDB collection `segment_cards` |
 | LLM | Groq `llama3-70b-8192` |
 | Guardrails | Post-hoc numeric validation against retrieved cards |
+| Agent | LangGraph router → retrieve → generate → guardrail flow |
+| Observability | Optional LangSmith tracing via `LANGCHAIN_*` environment variables |
+
+### LangSmith tracing
+
+Enable LangSmith traces for the LangGraph analyst agent by setting these variables (see [.env.example](.env.example)):
+
+```env
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_API_KEY=your-langsmith-api-key
+LANGCHAIN_PROJECT=shopper-segmentation
+```
+
+Traces include router decisions, retrieval, LLM generation, and guardrail validation. `load_dotenv()` runs at API startup before the graph is imported so tracing is active for `/chat` requests.
 
 ## Evaluation Metrics
 
@@ -401,8 +415,11 @@ shopper-segmentation/
 │       ├── personalization.py          # Module 4: Recommendations & uplift
 │       ├── rag/
 │       │   ├── build_cards.py          # Segment card generation
-│       │   ├── embed_store.py          # ChromaDB embedding & retrieval
-│       │   └── rag_chain.py            # RAG chain + Groq inference
+│       │   ├── vectorstore.py          # LangChain Chroma retrieval
+│       │   ├── tools.py                # Structured lookup tools
+│       │   ├── agent/                  # LangGraph analyst agent
+│       │   ├── evals/                  # RAG evaluation harness
+│       │   └── rag_chain.py            # Chat adapter + guardrails
 │       └── api/
 │           └── app.py                  # Module 6: FastAPI backend
 ├── frontend/

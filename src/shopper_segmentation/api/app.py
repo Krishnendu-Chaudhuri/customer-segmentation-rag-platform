@@ -2,36 +2,43 @@
 
 from __future__ import annotations
 
+import json
+import logging
 import os
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from shopper_segmentation.api.auth import verify_api_key
+from shopper_segmentation.api.sessions import resolve_thread_id
 from shopper_segmentation.artifacts import (
     ArtifactError,
     ensure_artifacts,
     load_profiles,
     load_recommendations,
 )
-from shopper_segmentation.rag.rag_chain import answer_query, get_groq_api_key
+from shopper_segmentation.rag.agent.graph import init_graph, shutdown_graph
+from shopper_segmentation.rag.rag_chain import answer_query_async, get_groq_api_key
 from shopper_segmentation.segmentation import MIN_SEGMENT_CONFIDENT_N, is_low_confidence_segment
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_ALLOWED_ORIGINS = "http://localhost:8504"
 
 
 def get_rate_limit_key(request: Request) -> str:
-    """Return rate-limit bucket key from API key or client IP.
+    """Return rate-limit bucket key from API key, thread id, or client IP.
 
     Args:
         request: Incoming HTTP request.
@@ -42,6 +49,11 @@ def get_rate_limit_key(request: Request) -> str:
     api_key = request.headers.get("X-API-Key")
     if api_key:
         return api_key
+
+    thread_id = request.query_params.get("thread_id")
+    if thread_id:
+        return f"thread:{thread_id}"
+
     return get_remote_address(request)
 
 
@@ -105,6 +117,10 @@ class ChatRequest(BaseModel):
     """Chat request body."""
 
     query: str = Field(..., min_length=1, description="Natural language analyst question")
+    thread_id: str | None = Field(
+        default=None,
+        description="Optional LangGraph session thread id for conversational memory",
+    )
 
 
 class RetrievedSegment(BaseModel):
@@ -148,7 +164,7 @@ def _segment_low_confidence(segment: dict[str, Any]) -> bool:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Warm cached data on startup."""
+    """Warm cached data and initialize LangGraph on startup."""
     import logging
 
     logger = logging.getLogger(__name__)
@@ -156,7 +172,9 @@ async def lifespan(app: FastAPI):
         ensure_artifacts()
     except ArtifactError as exc:
         logger.error("Startup artifact initialization failed: %s", exc)
+    await init_graph()
     yield
+    await shutdown_graph()
 
 
 def _require_profiles() -> dict[str, Any]:
@@ -299,39 +317,162 @@ def get_recommendations(segment_id: int) -> SegmentRecommendations:
     )
 
 
-@app.post("/chat", response_model=ChatResponse, tags=["chat"], dependencies=protected)
-@limiter.limit("10/minute")
-async def chat(request: Request, body: ChatRequest) -> ChatResponse:
-    """Ask the analyst chatbot a question about segments and promotions."""
-    try:
-        get_groq_api_key()
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+def _sse(data: dict[str, object]) -> str:
+    """Format a dictionary as a Server-Sent Event data line."""
+    return f"data: {json.dumps(data, default=str)}\n\n"
 
-    try:
-        result = await run_in_threadpool(answer_query, body.query)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Chat request failed: {exc}") from exc
 
+def _sse_error(code: str, message: str) -> str:
+    """Format a structured SSE error event."""
+    return _sse({"type": "error", "error": {"code": code, "message": message}})
+
+
+def _build_chat_response(result: dict[str, object]) -> ChatResponse:
+    """Map an agent result dictionary to the public chat response model."""
     retrieved = [
         RetrievedSegment(
             segment_id=int(card["segment_id"]),
             segment_name=str(card["segment_name"]),
             distance=float(card["distance"]),
         )
-        for card in result["retrieved_cards"]
+        for card in result.get("retrieved_cards", [])
     ]
-    validation_raw = result["validation"]
+    validation_raw = result.get("validation") or {}
     validation = ValidationResult(
-        validated=bool(validation_raw["validated"]),
-        numbers_found=[str(n) for n in validation_raw["numbers_found"]],
-        unsupported_numbers=[str(n) for n in validation_raw["unsupported_numbers"]],
+        validated=bool(validation_raw.get("validated", False)),
+        numbers_found=[str(n) for n in validation_raw.get("numbers_found", [])],
+        unsupported_numbers=[
+            str(n) for n in validation_raw.get("unsupported_numbers", [])
+        ],
     )
     return ChatResponse(
         query=str(result["query"]),
-        answer=str(result["answer"]),
+        answer=str(result.get("answer", "")),
         retrieved_segments=retrieved,
         validation=validation,
+    )
+
+
+async def _chat_event_stream(
+    query: str,
+    thread_id: str,
+    emit_thread_id: bool,
+) -> AsyncIterator[str]:
+    """Yield Server-Sent Events for incremental chat responses."""
+    from shopper_segmentation.rag.agent.graph import get_compiled_graph
+
+    logger.info(
+        "Chat stream start thread_id=%s query_len=%s",
+        thread_id,
+        len(query),
+    )
+    token_count = 0
+    try:
+        if emit_thread_id:
+            yield _sse({"type": "thread_id", "thread_id": thread_id})
+
+        graph = get_compiled_graph()
+        final_state: dict[str, object] | None = None
+
+        try:
+            async for event in graph.astream_events(
+                {"query": query, "retry_count": 0},
+                config={"configurable": {"thread_id": thread_id}},
+                version="v2",
+            ):
+                if event.get("event") == "on_chat_model_stream":
+                    chunk = event.get("data", {}).get("chunk")
+                    content = getattr(chunk, "content", "") if chunk is not None else ""
+                    if content:
+                        token_count += 1
+                        logger.debug("Chat stream token thread_id=%s", thread_id)
+                        yield _sse({"type": "token", "content": content})
+                if event.get("event") == "on_chain_end" and event.get("name") == "LangGraph":
+                    output = event.get("data", {}).get("output")
+                    if isinstance(output, dict):
+                        final_state = output
+        except Exception as exc:
+            logger.exception(
+                "Chat stream failed thread_id=%s: %s",
+                thread_id,
+                exc,
+            )
+            yield _sse_error("stream_failed", f"Chat request failed: {exc}")
+            return
+
+        if final_state is None:
+            logger.warning(
+                "Chat stream incomplete graph output thread_id=%s",
+                thread_id,
+            )
+            yield _sse_error(
+                "incomplete_graph",
+                "Chat stream ended without a complete agent response.",
+            )
+            return
+
+        result = {
+            "query": query,
+            "answer": final_state.get("answer", ""),
+            "retrieved_cards": final_state.get("retrieved_cards", []),
+            "validation": final_state.get("validation", {}),
+        }
+        payload = _build_chat_response(result).model_dump()
+        payload["type"] = "done"
+        payload["thread_id"] = thread_id
+        logger.info(
+            "Chat stream done thread_id=%s tokens=%s",
+            thread_id,
+            token_count,
+        )
+        yield _sse(payload)
+    finally:
+        logger.info("Chat stream end thread_id=%s tokens=%s", thread_id, token_count)
+
+
+@app.post("/chat", tags=["chat"], dependencies=protected, response_model=None)
+@limiter.limit("10/minute")
+async def chat(
+    request: Request,
+    body: ChatRequest,
+    stream: bool = True,
+):
+    """Ask the analyst chatbot a question about segments and promotions."""
+    try:
+        get_groq_api_key()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    thread_id = resolve_thread_id(request, body.thread_id)
+
+    if stream:
+        logger.info(
+            "Chat request stream=true thread_id=%s query_preview=%r",
+            thread_id,
+            body.query[:80],
+        )
+    else:
+        logger.info(
+            "Chat request stream=false thread_id=%s query_preview=%r",
+            thread_id,
+            body.query[:80],
+        )
+
+    if not stream:
+        try:
+            result = await answer_query_async(body.query, thread_id=thread_id)
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"Chat request failed: {exc}") from exc
+        return _build_chat_response(result)
+
+    return StreamingResponse(
+        _chat_event_stream(body.query, thread_id, body.thread_id is None),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

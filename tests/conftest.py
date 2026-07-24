@@ -24,10 +24,11 @@ def api_key_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def client() -> TestClient:
-    """Return a FastAPI test client."""
+    """Return a FastAPI test client with lifespan initialized."""
     from shopper_segmentation.api.app import app
 
-    return TestClient(app)
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 @pytest.fixture

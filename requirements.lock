@@ -10,6 +10,8 @@ aiohttp==3.14.1
     # via kubernetes
 aiosignal==1.4.0
     # via aiohttp
+aiosqlite==0.22.1
+    # via langgraph-checkpoint-sqlite
 altair==6.2.2
     # via streamlit
 annotated-doc==0.0.4
@@ -22,6 +24,7 @@ anyio==4.14.2
     # via
     #   groq
     #   httpx
+    #   langsmith
     #   starlette
     #   streamlit
     #   watchfiles
@@ -49,7 +52,9 @@ certifi==2026.6.17
 charset-normalizer==3.4.9
     # via requests
 chromadb==1.5.9
-    # via shopper-segmentation (pyproject.toml)
+    # via
+    #   langchain-chroma
+    #   shopper-segmentation (pyproject.toml)
 click==8.4.2
     # via
     #   huggingface-hub
@@ -64,7 +69,9 @@ colorama==0.4.6
 deprecated==1.3.1
     # via limits
 distro==1.9.0
-    # via groq
+    # via
+    #   groq
+    #   langsmith
 duckdb==1.5.4
     # via shopper-segmentation (pyproject.toml)
 durationpy==0.10
@@ -91,8 +98,10 @@ gitpython==3.1.51
     # via streamlit
 googleapis-common-protos==1.75.0
     # via opentelemetry-exporter-otlp-proto-grpc
-groq==1.5.0
-    # via shopper-segmentation (pyproject.toml)
+groq==0.37.1
+    # via
+    #   langchain-groq
+    #   shopper-segmentation (pyproject.toml)
 grpcio==1.82.1
     # via
     #   chromadb
@@ -114,9 +123,12 @@ httpx==0.28.1
     #   chromadb
     #   groq
     #   huggingface-hub
+    #   langgraph-sdk
+    #   langsmith
     #   shopper-segmentation (pyproject.toml)
 huggingface-hub==1.23.0
     # via
+    #   langchain-huggingface
     #   sentence-transformers
     #   tokenizers
     #   transformers
@@ -137,6 +149,10 @@ jinja2==3.1.6
     #   torch
 joblib==1.5.3
     # via scikit-learn
+jsonpatch==1.33
+    # via langchain-core
+jsonpointer==3.1.1
+    # via jsonpatch
 jsonschema==4.26.0
     # via
     #   altair
@@ -145,6 +161,44 @@ jsonschema-specifications==2025.9.1
     # via jsonschema
 kubernetes==36.0.3
     # via chromadb
+langchain==1.3.2
+    # via shopper-segmentation (pyproject.toml)
+langchain-chroma==1.1.0
+    # via shopper-segmentation (pyproject.toml)
+langchain-core==1.4.9
+    # via
+    #   langchain
+    #   langchain-chroma
+    #   langchain-groq
+    #   langchain-huggingface
+    #   langgraph
+    #   langgraph-checkpoint
+    #   langgraph-prebuilt
+langchain-groq==1.1.3
+    # via shopper-segmentation (pyproject.toml)
+langchain-huggingface==1.2.2
+    # via shopper-segmentation (pyproject.toml)
+langchain-protocol==0.0.18
+    # via langchain-core
+langgraph==1.2.2
+    # via
+    #   langchain
+    #   shopper-segmentation (pyproject.toml)
+langgraph-checkpoint==4.1.1
+    # via
+    #   langgraph
+    #   langgraph-checkpoint-sqlite
+    #   langgraph-prebuilt
+langgraph-checkpoint-sqlite==3.1.0
+    # via shopper-segmentation (pyproject.toml)
+langgraph-prebuilt==1.1.0
+    # via langgraph
+langgraph-sdk==0.3.15
+    # via langgraph
+langsmith==0.10.6
+    # via
+    #   langchain-core
+    #   shopper-segmentation (pyproject.toml)
 limits==5.8.0
     # via slowapi
 markdown-it-py==4.2.0
@@ -171,6 +225,7 @@ networkx==3.6.1
 numpy==2.5.1
     # via
     #   chromadb
+    #   langchain-chroma
     #   onnxruntime
     #   pandas
     #   pydeck
@@ -204,7 +259,12 @@ opentelemetry-sdk==1.43.0
 opentelemetry-semantic-conventions==0.64b0
     # via opentelemetry-sdk
 orjson==3.11.9
-    # via chromadb
+    # via
+    #   chromadb
+    #   langgraph-sdk
+    #   langsmith
+ormsgpack==1.12.2
+    # via langgraph-checkpoint
 overrides==7.7.0
     # via chromadb
 packaging==26.2
@@ -212,6 +272,8 @@ packaging==26.2
     #   altair
     #   build
     #   huggingface-hub
+    #   langchain-core
+    #   langsmith
     #   limits
     #   onnxruntime
     #   plotly
@@ -246,6 +308,10 @@ pydantic==2.13.4
     #   chromadb
     #   fastapi
     #   groq
+    #   langchain
+    #   langchain-core
+    #   langgraph
+    #   langsmith
     #   pydantic-settings
 pydantic-core==2.46.4
     # via pydantic
@@ -275,6 +341,7 @@ pyyaml==6.0.3
     #   chromadb
     #   huggingface-hub
     #   kubernetes
+    #   langchain-core
     #   transformers
     #   uvicorn
 referencing==0.37.0
@@ -286,10 +353,14 @@ regex==2026.7.10
 requests==2.34.2
     # via
     #   kubernetes
+    #   langsmith
     #   requests-oauthlib
+    #   requests-toolbelt
     #   streamlit
 requests-oauthlib==2.0.0
     # via kubernetes
+requests-toolbelt==1.0.0
+    # via langsmith
 rich==15.0.0
     # via
     #   chromadb
@@ -321,7 +392,11 @@ slowapi==0.1.10
 smmap==5.0.3
     # via gitdb
 sniffio==1.3.1
-    # via groq
+    # via
+    #   groq
+    #   langsmith
+sqlite-vec==0.1.9
+    # via langgraph-checkpoint-sqlite
 starlette==1.3.1
     # via
     #   fastapi
@@ -335,12 +410,14 @@ tabulate==0.10.0
 tenacity==9.1.4
     # via
     #   chromadb
+    #   langchain-core
     #   streamlit
 threadpoolctl==3.6.0
     # via scikit-learn
 tokenizers==0.22.2
     # via
     #   chromadb
+    #   langchain-huggingface
     #   transformers
 toml==0.10.2
     # via streamlit
@@ -369,6 +446,9 @@ typing-extensions==4.16.0
     #   groq
     #   grpcio
     #   huggingface-hub
+    #   langchain-core
+    #   langchain-protocol
+    #   langsmith
     #   limits
     #   opentelemetry-api
     #   opentelemetry-exporter-otlp-proto-grpc
@@ -393,6 +473,10 @@ urllib3==2.7.0
     # via
     #   kubernetes
     #   requests
+uuid-utils==0.17.0
+    # via
+    #   langchain-core
+    #   langsmith
 uvicorn[standard]==0.51.0
     # via
     #   chromadb
@@ -406,12 +490,19 @@ websocket-client==1.9.0
     # via kubernetes
 websockets==16.1
     # via
+    #   langsmith
     #   streamlit
     #   uvicorn
 wrapt==2.2.2
     # via deprecated
+xxhash==3.8.1
+    # via
+    #   langgraph
+    #   langsmith
 yarl==1.24.2
     # via aiohttp
+zstandard==0.25.0
+    # via langsmith
 
 # The following packages are considered to be unsafe in a requirements file:
 # setuptools

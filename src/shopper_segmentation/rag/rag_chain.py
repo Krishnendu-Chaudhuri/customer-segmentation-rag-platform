@@ -11,16 +11,19 @@ from typing import Any
 
 from cachetools import TTLCache
 from dotenv import load_dotenv
-from groq import Groq
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_groq import ChatGroq
 
 from shopper_segmentation.logging_config import configure_logging
-from shopper_segmentation.rag.embed_store import retrieve_cards
+from shopper_segmentation.rag.agent.prompts import SYSTEM_PROMPT
+from shopper_segmentation.rag.vectorstore import retrieve_cards
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 GROQ_MODEL = "llama3-70b-8192"
+GROQ_FALLBACK_MODEL = "llama3-8b-8192"
 MAX_RETRIES = 5
 INITIAL_BACKOFF_SECONDS = 2.0
 DEFAULT_CHAT_CACHE_TTL_SECONDS = 3600
@@ -31,17 +34,6 @@ _chat_cache: TTLCache[str, dict[str, object]] = TTLCache(
     maxsize=256,
     ttl=CHAT_CACHE_TTL_SECONDS,
 )
-
-SYSTEM_PROMPT = """You are a retail analytics assistant for a shopper segmentation project.
-Answer ONLY using the segment context provided below.
-
-Rules:
-- Cite specific numbers from the context when making claims.
-- Never invent statistics, percentages, product IDs, or segment sizes.
-- If the context lacks information to answer, say you do not have enough data.
-- Reference segment IDs and names exactly as shown in the context.
-- Be concise and business-friendly.
-"""
 
 NUMBER_PATTERN = re.compile(
     r"(?<![A-Za-z0-9_])-?\d+(?:\.\d+)?(?:%|\s*(?:percent|pct))?(?![A-Za-z0-9_])",
@@ -67,13 +59,23 @@ def get_groq_api_key() -> str:
     return api_key
 
 
-def get_groq_client() -> Groq:
-    """Create a Groq client using the configured API key.
+def get_chat_model() -> ChatGroq:
+    """Create a Groq chat model with retry handling and fallback.
 
     Returns:
-        Initialized Groq client.
+        Configured ChatGroq instance with 70B primary and 8B fallback.
     """
-    return Groq(api_key=get_groq_api_key())
+    primary = ChatGroq(
+        model=GROQ_MODEL,
+        temperature=0.1,
+        api_key=get_groq_api_key(),
+    ).with_retry(stop_after_attempt=MAX_RETRIES)
+    fallback = ChatGroq(
+        model=GROQ_FALLBACK_MODEL,
+        temperature=0.1,
+        api_key=get_groq_api_key(),
+    ).with_retry(stop_after_attempt=MAX_RETRIES)
+    return primary.with_fallbacks([fallback])
 
 
 def extract_numbers(text: str) -> list[str]:
@@ -146,7 +148,7 @@ def validate_response_numbers(response: str, context: str) -> dict[str, object]:
     }
 
 
-def build_messages(query: str, retrieved_cards: list[dict[str, object]]) -> list[dict[str, str]]:
+def build_messages(query: str, retrieved_cards: list[dict[str, object]]) -> list[Any]:
     """Build chat messages with retrieved context injected.
 
     Args:
@@ -154,7 +156,7 @@ def build_messages(query: str, retrieved_cards: list[dict[str, object]]) -> list
         retrieved_cards: Retrieved segment cards.
 
     Returns:
-        OpenAI-compatible message list for Groq chat completions.
+        LangChain message list for the chat model.
     """
     context = "\n\n---\n\n".join(str(card["content"]) for card in retrieved_cards)
     user_prompt = (
@@ -163,8 +165,8 @@ def build_messages(query: str, retrieved_cards: list[dict[str, object]]) -> list
         "Answer using only the context above."
     )
     return [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user_prompt},
+        SystemMessage(content=SYSTEM_PROMPT),
+        HumanMessage(content=user_prompt),
     ]
 
 
@@ -173,15 +175,15 @@ def call_with_retry(
     max_retries: int = MAX_RETRIES,
     initial_backoff: float = INITIAL_BACKOFF_SECONDS,
 ) -> Any:
-    """Call a Groq API function with exponential backoff on rate limits.
+    """Call a function with exponential backoff on rate limits.
 
     Args:
-        func: Zero-argument callable performing the API request.
+        func: Zero-argument callable performing the request.
         max_retries: Maximum retry attempts.
         initial_backoff: Initial sleep duration in seconds.
 
     Returns:
-        API response from the callable.
+        Result from the callable.
 
     Raises:
         Exception: Re-raises the last error after retries are exhausted.
@@ -229,48 +231,109 @@ def clear_chat_cache() -> None:
     _chat_cache.clear()
 
 
+def _message_content(response: AIMessage) -> str:
+    """Extract string content from a chat model response.
+
+    Args:
+        response: LangChain AIMessage response.
+
+    Returns:
+        Response text content.
+    """
+    content = response.content
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = [part.get("text", "") for part in content if isinstance(part, dict)]
+        return "".join(parts)
+    return str(content)
+
+
 def answer_query(
     query: str,
     top_k: int = 3,
-    client: Groq | None = None,
+    client: Any | None = None,
+    thread_id: str | None = None,
 ) -> dict[str, object]:
-    """Retrieve context and answer a user query via Groq.
+    """Retrieve context and answer a user query via the LangGraph agent.
 
     Args:
         query: Natural language question.
-        top_k: Number of segment cards to retrieve.
-        client: Optional preconfigured Groq client.
+        top_k: Number of segment cards to retrieve (search route only).
+        client: Optional preconfigured chat model (ChatGroq); used by generate node.
+        thread_id: LangGraph session thread id for conversational memory.
 
     Returns:
         Dictionary with answer, retrieved cards, and validation metadata.
     """
+    import asyncio
+
+    async def _run() -> dict[str, object]:
+        from shopper_segmentation.rag.agent.graph import (
+            get_compiled_graph_if_ready,
+            init_graph,
+            shutdown_graph,
+        )
+
+        managed_lifecycle = get_compiled_graph_if_ready() is None
+        if managed_lifecycle:
+            await init_graph()
+        try:
+            return await answer_query_async(query, top_k, client, thread_id)
+        finally:
+            if managed_lifecycle:
+                await shutdown_graph()
+
+    return asyncio.run(_run())
+
+
+async def answer_query_async(
+    query: str,
+    top_k: int = 3,
+    client: Any | None = None,
+    thread_id: str | None = None,
+) -> dict[str, object]:
+    """Async variant of answer_query using graph.ainvoke.
+
+    Args:
+        query: Natural language question.
+        top_k: Number of segment cards to retrieve (search route only).
+        client: Optional preconfigured chat model (ChatGroq); used by generate node.
+        thread_id: LangGraph session thread id for conversational memory.
+
+    Returns:
+        Dictionary with answer, retrieved cards, and validation metadata.
+    """
+    import uuid
+
+    from shopper_segmentation.rag.agent.graph import get_compiled_graph
+
     cache_key = _normalize_query(query)
     if cache_key in _chat_cache:
         logger.info("Chat cache hit for query: %s", query)
         return _chat_cache[cache_key]
 
-    retrieved = retrieve_cards(query, top_k=top_k)
-    context = "\n\n---\n\n".join(str(card["content"]) for card in retrieved)
-    messages = build_messages(query, retrieved)
+    session_thread_id = thread_id or str(uuid.uuid4())
+    config = {"configurable": {"thread_id": session_thread_id}}
+    graph = get_compiled_graph()
+    input_state = {"query": query, "retry_count": 0}
 
-    groq_client = client or get_groq_client()
+    if client is not None:
+        from unittest.mock import patch
 
-    def _call() -> Any:
-        return groq_client.chat.completions.create(
-            model=GROQ_MODEL,
-            messages=messages,
-            temperature=0.1,
-        )
-
-    response = call_with_retry(_call)
-    answer = response.choices[0].message.content or ""
-    validation = validate_response_numbers(answer, context)
+        with patch(
+            "shopper_segmentation.rag.rag_chain.get_chat_model",
+            return_value=client,
+        ):
+            final_state = await graph.ainvoke(input_state, config=config)
+    else:
+        final_state = await graph.ainvoke(input_state, config=config)
 
     result = {
         "query": query,
-        "answer": answer,
-        "retrieved_cards": retrieved,
-        "validation": validation,
+        "answer": final_state.get("answer", ""),
+        "retrieved_cards": final_state.get("retrieved_cards", []),
+        "validation": final_state.get("validation", {}),
     }
     _chat_cache[cache_key] = result
     return result
@@ -278,6 +341,8 @@ def answer_query(
 
 def main() -> None:
     """Run demo queries against the RAG chain."""
+    import asyncio
+
     configure_logging()
     logger.info("Module 5: RAG — Explainability Chatbot")
 
@@ -294,28 +359,37 @@ def main() -> None:
         logger.warning("%s", exc)
         logger.info("Showing retrieval results only (no LLM call).")
 
-    for query in demo_queries:
-        logger.info("Query: %s", query)
-        retrieved = retrieve_cards(query, top_k=3)
-        logger.info(
-            "Retrieved segments: %s",
-            [c["segment_name"] for c in retrieved],
-        )
+    async def _run_demo() -> None:
+        from shopper_segmentation.rag.agent.graph import init_graph, shutdown_graph
 
-        if not has_key:
-            logger.info(
-                "Top retrieved card preview:\n%s\n...",
-                str(retrieved[0]["content"])[:600],
-            )
-            continue
+        await init_graph()
+        try:
+            for query in demo_queries:
+                logger.info("Query: %s", query)
+                retrieved = retrieve_cards(query, top_k=3)
+                logger.info(
+                    "Retrieved segments: %s",
+                    [c["segment_name"] for c in retrieved],
+                )
 
-        result = answer_query(query, client=get_groq_client())
-        logger.info("%s", result["answer"])
-        validation = result["validation"]
-        if validation["unsupported_numbers"]:
-            logger.warning("Validation flags: %s", validation["unsupported_numbers"])
-        else:
-            logger.info("Validation: all cited numbers found in context.")
+                if not has_key:
+                    logger.info(
+                        "Top retrieved card preview:\n%s\n...",
+                        str(retrieved[0]["content"])[:600],
+                    )
+                    continue
+
+                result = await answer_query_async(query, client=get_chat_model())
+                logger.info("%s", result["answer"])
+                validation = result["validation"]
+                if validation["unsupported_numbers"]:
+                    logger.warning("Validation flags: %s", validation["unsupported_numbers"])
+                else:
+                    logger.info("Validation: all cited numbers found in context.")
+        finally:
+            await shutdown_graph()
+
+    asyncio.run(_run_demo())
 
 
 if __name__ == "__main__":

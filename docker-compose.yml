@@ -8,6 +8,9 @@ services:
     environment:
       PYTHONPATH: /app/src
       ALLOWED_ORIGINS: http://localhost:8504
+      LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
+      LANGCHAIN_PROJECT: shopper-segmentation
+      CHECKPOINT_DB_PATH: /app/output/checkpoints.sqlite
     volumes:
       - ${DATA_DIR:-./data}:/app/data
       - ./output:/app/output

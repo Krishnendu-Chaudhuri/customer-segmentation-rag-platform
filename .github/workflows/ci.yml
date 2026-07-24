@@ -38,3 +38,17 @@ jobs:
         env:
           API_KEY: test-secret-key
         run: pytest tests/ -v
+
+      - name: RAG eval suite
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          API_KEY: test-secret-key
+        continue-on-error: true
+        run: python -m shopper_segmentation.rag.evals.run_eval | tee eval-results.txt
+
+      - name: Upload eval output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rag-eval-results
+          path: eval-results.txt

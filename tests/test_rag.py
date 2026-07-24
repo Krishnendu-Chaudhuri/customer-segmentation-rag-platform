@@ -59,16 +59,19 @@ def test_answer_query_uses_cache_for_identical_questions() -> None:
     """Repeated identical queries should not call Groq more than once."""
     from unittest.mock import MagicMock, patch
 
+    from langchain_core.messages import AIMessage
+
     clear_chat_cache()
-    mock_client = MagicMock()
-    mock_response = MagicMock()
-    mock_response.choices = [MagicMock(message=MagicMock(content="Cached answer 42."))]
-    mock_client.chat.completions.create.return_value = mock_response
+    mock_model = MagicMock()
+    mock_model.invoke.return_value = AIMessage(content="Cached answer without numbers.")
 
-    with patch("shopper_segmentation.rag.rag_chain.retrieve_cards", return_value=[]):
-        with patch("shopper_segmentation.rag.rag_chain.get_groq_client", return_value=mock_client):
-            answer_query("Who are promo-sensitive shoppers?")
-            answer_query("Who are promo-sensitive shoppers?")
+    with patch(
+        "shopper_segmentation.rag.vectorstore.retrieve_cards",
+        return_value=[],
+    ):
+        with patch("shopper_segmentation.rag.rag_chain.get_chat_model", return_value=mock_model):
+            answer_query("Who are promo-sensitive shoppers?", client=mock_model)
+            answer_query("Who are promo-sensitive shoppers?", client=mock_model)
 
-    assert mock_client.chat.completions.create.call_count == 1
+    assert mock_model.invoke.call_count == 1
     clear_chat_cache()

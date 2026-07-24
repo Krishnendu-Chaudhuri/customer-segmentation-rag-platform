@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -72,7 +72,7 @@ def test_chat_missing_groq_api_key(client: TestClient, auth_headers: dict[str, s
         side_effect=RuntimeError("GROQ_API_KEY is not set."),
     ):
         response = client.post(
-            "/chat",
+            "/chat?stream=false",
             json={"query": "Who are promo-sensitive shoppers?"},
             headers=auth_headers,
         )
@@ -94,11 +94,14 @@ def test_chat_rate_limit(client: TestClient, auth_headers: dict[str, str]) -> No
     }
 
     with patch("shopper_segmentation.api.app.get_groq_api_key", return_value="gsk_test"):
-        with patch("shopper_segmentation.api.app.answer_query", return_value=mock_result):
+        with patch(
+            "shopper_segmentation.api.app.answer_query_async",
+            new=AsyncMock(return_value=mock_result),
+        ):
             statuses: list[int] = []
             for _ in range(12):
                 response = client.post(
-                    "/chat",
+                    "/chat?stream=false",
                     json={"query": "rate limit test"},
                     headers=auth_headers,
                 )
@@ -106,6 +109,72 @@ def test_chat_rate_limit(client: TestClient, auth_headers: dict[str, str]) -> No
 
     assert 200 in statuses
     assert 429 in statuses
+
+
+def test_groq_outage_uses_fallback_not_500(client: TestClient, auth_headers: dict[str, str]) -> None:
+    """Chat should return 200 when the adapter succeeds after model fallback."""
+    from shopper_segmentation.api.app import limiter
+
+    if hasattr(limiter, "_storage"):
+        limiter._storage.storage.clear()
+
+    mock_result = {
+        "query": "Who are promo-sensitive shoppers?",
+        "answer": "Recovered response without unsupported numbers.",
+        "retrieved_cards": [],
+        "validation": {
+            "validated": True,
+            "numbers_found": [],
+            "unsupported_numbers": [],
+        },
+    }
+
+    with patch("shopper_segmentation.api.app.get_groq_api_key", return_value="gsk_test"):
+        with patch(
+            "shopper_segmentation.api.app.answer_query_async",
+            new=AsyncMock(return_value=mock_result),
+        ):
+            response = client.post(
+                "/chat?stream=false",
+                json={"query": "Who are promo-sensitive shoppers?"},
+                headers=auth_headers,
+            )
+
+    assert response.status_code == 200
+    assert response.json()["answer"] == mock_result["answer"]
+
+
+def test_chat_stream_returns_error_sse_on_graph_failure(
+    client: TestClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """Streaming chat should emit structured SSE errors instead of aborting."""
+    from shopper_segmentation.api.app import limiter
+
+    if hasattr(limiter, "_storage"):
+        limiter._storage.storage.clear()
+
+    async def failing_astream_events(*args: object, **kwargs: object):
+        raise RuntimeError("Simulated graph failure")
+        yield  # pragma: no cover
+
+    mock_graph = MagicMock()
+    mock_graph.astream_events = failing_astream_events
+
+    with patch("shopper_segmentation.api.app.get_groq_api_key", return_value="gsk_test"):
+        with patch(
+            "shopper_segmentation.rag.agent.graph.get_compiled_graph",
+            return_value=mock_graph,
+        ):
+            response = client.post(
+                "/chat?stream=true",
+                json={"query": "Who are promo-sensitive shoppers?"},
+                headers=auth_headers,
+            )
+
+    assert response.status_code == 200
+    assert '"type": "error"' in response.text or '"type":"error"' in response.text
+    assert "stream_failed" in response.text
 
 
 def test_low_confidence_segments_flagged(client: TestClient, auth_headers: dict[str, str]) -> None:
